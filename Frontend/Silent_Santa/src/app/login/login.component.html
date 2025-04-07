@@ -1,0 +1,72 @@
+<div class="page">
+    <div class="login-container">
+        <!-- Small, centered image -->
+        <img src="assets/surprise_icon.png" alt="Surprise" class="surprise-image" />
+
+        <h1>Login</h1>
+        <div class="inputs">
+            <form (ngSubmit)="onLoginSubmit(loginForm)" #loginForm="ngForm">
+                <div class="input-group">
+                    <label for="email">Email</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email"
+                        [(ngModel)]="userData.email" 
+                        #email="ngModel"
+                        required
+                        email
+                        placeholder=" ✉ Your email" />
+                    <div *ngIf="email.invalid && (email.dirty || email.touched)" class="error-message">
+                        <div *ngIf="email.errors?.['required']">Email is required.</div>
+                        <div *ngIf="email.errors?.['email']">Please enter a valid email.</div>
+                    </div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password"
+                        [(ngModel)]="userData.password" 
+                        #password="ngModel"
+                        required
+                        minlength="6"
+                        placeholder=" ◮ Your password" />
+                    <div *ngIf="password.invalid && (password.dirty || password.touched)" class="error-message">
+                        <div *ngIf="password.errors?.['required']">Password is required.</div>
+                        <div *ngIf="password.errors?.['minlength']">Password must be at least 6 characters.</div>
+                    </div>
+                </div>
+                
+                <div class="form-group checkbox">
+                    <label>
+                        <input 
+                            type="checkbox" 
+                            name="rememberMe" 
+                            [(ngModel)]="userData.rememberMe">
+                        <span>Remember me</span>
+                    </label>
+                </div>
+                
+                <div *ngIf="errorMessage" class="error-message">
+                    {{ errorMessage }}
+                </div>
+                
+                <button 
+                    type="submit" 
+                    class="login-button" 
+                    [disabled]="isLoading || loginForm.invalid">
+                    {{ isLoading ? 'Loading...' : 'Log In' }}
+                </button>
+            </form>
+
+            <div class="signup-link">
+                <span>Don't have an account?</span>
+                <a routerLink="/signup"> ✨ SIGN UP </a>
+            </div>
+        </div>
+    </div>
+</div>
+

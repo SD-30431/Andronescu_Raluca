@@ -1,0 +1,105 @@
+
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* background: linear-gradient(to right, #eedede, #dde2e2); */
+  background: rgba(255, 255, 255, 0.281);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur 50px;
+  padding: 50px;
+  border-radius: 20px;
+  width: 100%; 
+  max-width: 350px; 
+  box-shadow: 5px 6px 6px rgba(0, 0, 0, 0.1);
+}
+  .checkbox{
+    color: #46ac97;
+    accent-color: #46ac97;
+    margin-left: 10px; 
+  } 
+  
+  .surprise-image {
+      display: block;
+      width: 90px; 
+      height: auto;
+  }
+
+  h1 {
+    font-family: 'Comfortaa', sans-serif;  /* Apply Comfortaa font */
+    color: #46ac97;  /* Set text color */
+    margin-bottom: 20px;
+  }
+  
+  
+  .input-group {
+    width: 100%;
+    margin-bottom: 15px;
+  }
+  
+  .input-group label {
+    margin-left: 10px;
+    font-size: 14px;
+    color: #46ac97;
+  }
+
+  .inputs {
+    width: 100%;
+    display: flex;
+    flex-direction: column;  
+    align-items: center;     /* Center horizontally */
+  }
+  .input-group input {
+    width: 100%;  /* Ensures the input field takes full width */
+    padding: 10px;  /* Same padding as the button */
+    margin-top: 5px;
+    padding-left: 15px;
+    border: none;
+    border-radius: 20px;
+    outline: none;
+    background-color: #ffffffd5;
+    font-family: 'Comfortaa', sans-serif; 
+    box-shadow: 5px 6px 6px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box; /* Ensures padding doesn't affect the width */
+  }
+  
+  .login-button {
+    width: 100%;  /* Ensures the button takes full width */
+    padding: 10px;  /* Same padding as the input field */
+    margin-top: 15px;
+    background-color: #46ac97;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-family: 'Comfortaa', sans-serif;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    box-shadow: 5px 6px 6px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box; /* Ensures padding doesn't affect the width */
+  }
+  
+  
+  .login-button:hover {
+    background: #ef6e6e;
+    color: #ffffff;
+  }
+  
+  .signup-link {
+    margin-top: 15px;
+    color: #46ac97;
+  }
+  
+  .signup-link a {
+    color: #ef6e6e;
+    text-decoration: none;
+    font-weight: bold;
+  }
+
+  .signup-link:hover a {
+    color: #46ac97;
+    text-decoration: none;
+    font-weight: bold;
+  }
