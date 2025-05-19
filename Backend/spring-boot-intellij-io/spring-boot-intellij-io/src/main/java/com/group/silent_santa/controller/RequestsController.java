@@ -1,135 +1,144 @@
 package com.group.silent_santa.controller;
 
-import com.group.silent_santa.model.LettersModel;
-import com.group.silent_santa.model.RequestsModel;
-import com.group.silent_santa.model.UsersModel;
-import com.group.silent_santa.service.LettersService;
+import com.group.silent_santa.DTO.LetterRequestDTO;
+import com.group.silent_santa.model.*;
+import com.group.silent_santa.repository.RequestsRepository;
+import com.group.silent_santa.repository.UsersRepository;
 import com.group.silent_santa.service.RequestsService;
-import com.group.silent_santa.service.UsersService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.Principal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/requests")
-@CrossOrigin(origins = "http://localhost:4200")
-@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class RequestsController {
+    @Autowired
+    private RequestsService requestsService;
+    @Autowired
+    private UsersRepository usersRepository;
+    @Autowired
+    private RequestsRepository requestsRepository;
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
-    private final RequestsService requestsService;
-    private final UsersService usersService;
-    private final LettersService lettersService;
-
-    @PostMapping
-    public ResponseEntity<?> createRequest(@RequestBody Map<String, String> requestData, Principal principal) {
-        try {
-            String letterId = requestData.get("letterId");
-
-            // Get the current user
-            UsersModel currentUser = usersService.findByEmail(principal.getName());
-            if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
-            }
-
-            // Get the letter
-            LettersModel letter = lettersService.getLetterById(UUID.fromString(letterId));
-            if (letter == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Letter not found");
-            }
-
-            // Create the request
-            RequestsModel request = requestsService.addRequest(currentUser, letter);
-            return ResponseEntity.ok(request);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating request: " + e.getMessage());
-        }
+    public RequestsController(RequestsService requestsService, RequestsRepository requestsRepository,
+                              UsersRepository usersRepository,
+                              SimpMessagingTemplate messagingTemplate) {
+        this.requestsService = requestsService;
+        this.requestsRepository = requestsRepository;
+        this.usersRepository = usersRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
-    @GetMapping("/user")
-    public ResponseEntity<?> getUserRequests(Principal principal) {
-        try {
-            UsersModel currentUser = usersService.findByEmail(principal.getName());
-            if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
-            }
-
-            List<RequestsModel> requests = requestsService.getRequestsByUser(currentUser);
-            return ResponseEntity.ok(requests);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error fetching requests: " + e.getMessage());
+    // Get all requests made by a user
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getUserRequests(@PathVariable UUID userId) {
+        List<LettersModel> req = requestsService.getAllRequests(userId);
+        return ResponseEntity.ok(req);
+    }
+    // Get all WAITING requests made by a user
+    @GetMapping("/user/{userId}/waiting")
+    public ResponseEntity<?> getAllWaitingRequests(@PathVariable UUID userId) {
+        Optional<UsersModel> userOpt = usersRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
+
+        UsersModel user = userOpt.get();
+        List<RequestsModel> waitingRequests = requestsRepository.findByUserAndStatus(user, RequestsModel.RequestStatus.WAITING);
+
+        // Extract the letters from the requests
+        List<LettersModel> waitingLetters = waitingRequests.stream()
+                .map(RequestsModel::getLetter)
+                .toList();
+
+        return ResponseEntity.ok(waitingLetters);
     }
 
-    @GetMapping("/letter/{letterId}")
-    public ResponseEntity<?> getRequestsForLetter(@PathVariable String letterId, Principal principal) {
-        try {
-            UsersModel currentUser = usersService.findByEmail(principal.getName());
-            if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
-            }
-
-            LettersModel letter = lettersService.getLetterById(UUID.fromString(letterId));
-            if (letter == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Letter not found");
-            }
-
-            // Check if the user is the one who posted the letter
-            if (!letter.getPostedBy().getId().equals(currentUser.getId())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You are not authorized to view these requests");
-            }
-
-            List<RequestsModel> requests = requestsService.getRequestsByLetter(letter);
-            return ResponseEntity.ok(requests);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error fetching requests: " + e.getMessage());
+    // Get all ACCEPED requests made by a user
+    @GetMapping("/user/{userId}/accepted")
+    public ResponseEntity<?> getAllAcceptedRequests(@PathVariable UUID userId) {
+        Optional<UsersModel> userOpt = usersRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
+
+        UsersModel user = userOpt.get();
+        List<RequestsModel> waitingRequests = requestsRepository.findByUserAndStatus(user, RequestsModel.RequestStatus.ACCEPTED);
+        // Extract the letters from the requests
+        List<LettersModel> waitingLetters = waitingRequests.stream()
+                .map(RequestsModel::getLetter)
+                .toList();
+
+        return ResponseEntity.ok(waitingLetters);
+    }
+    // Get all requests for letters posted by a user
+    @GetMapping("/letter-owner/{userId}")
+    public ResponseEntity<?> getLetterOwnerRequests(@PathVariable UUID userId) {
+        Optional<UsersModel> userOpt = usersRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }
+        List<LetterRequestDTO> letterRequests = requestsService.getLetterRequestsForOwner(userOpt.get());
+        return ResponseEntity.ok(letterRequests);
+    }
+
+    @PostMapping("/user/{userId}/letter/{letterId}")
+    public ResponseEntity<RequestsModel> addRequest(@PathVariable UUID userId, @PathVariable UUID letterId) {
+        RequestsModel request = requestsService.addRequest(userId, letterId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(request);
     }
 
     @PutMapping("/{requestId}/accept")
-    public ResponseEntity<?> acceptRequest(@PathVariable String requestId, Principal principal) {
-        try {
-            UsersModel currentUser = usersService.findByEmail(principal.getName());
-            if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
-            }
-
-            boolean success = requestsService.acceptRequest(UUID.fromString(requestId), currentUser);
-            if (success) {
-                return ResponseEntity.ok().body("Request accepted successfully");
-            } else {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Request not found");
-            }
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error accepting request: " + e.getMessage());
+    public ResponseEntity<?> acceptedRequest(@PathVariable UUID requestId, @RequestBody UsersModel admin) {
+        boolean isAccepted = requestsService.acceptRequest(requestId, admin);
+        if (isAccepted) {
+            System.out.println("Request accepted and notification sent.");
+            return ResponseEntity.ok().body(Map.of(
+                    "status", "success",
+                    "message", "Request accepted and notification sent."
+            ));
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                    "status", "failure",
+                    "message", "Request not found or could not be accepted."
+            ));
         }
     }
 
     @PutMapping("/{requestId}/deny")
-    public ResponseEntity<?> denyRequest(@PathVariable String requestId, Principal principal) {
-        try {
-            UsersModel currentUser = usersService.findByEmail(principal.getName());
-            if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
-            }
-
-            boolean success = requestsService.denyRequest(UUID.fromString(requestId), currentUser);
-            if (success) {
-                return ResponseEntity.ok().body("Request denied successfully");
-            } else {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Request not found");
-            }
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error denying request: " + e.getMessage());
+     public ResponseEntity<?> deniedRequest(@PathVariable UUID requestId, @RequestBody UsersModel admin) {
+         boolean isDenied = requestsService.denyRequest(requestId, admin) ;
+        if (isDenied) {
+            System.out.println("Request denied and notification sent.");
+            return ResponseEntity.ok().body(Map.of(
+                    "status", "success",
+                    "message", "Request denied and notification sent."
+            ));
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                    "status", "failure",
+                    "message", "Request not found or could not be accepted."
+            ));
         }
+    }
+
+    // Check if a request exists
+    @GetMapping("/user/{userId}/letter/{letterId}")
+    public ResponseEntity<Map<String, Boolean>> checkRequest(
+            @PathVariable UUID userId,
+            @PathVariable UUID letterId) {
+        boolean isRequested = requestsService.isRequested(userId, letterId);
+        return ResponseEntity.ok(Map.of("isFavorite", isRequested));
     }
 }

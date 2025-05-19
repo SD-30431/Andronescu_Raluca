@@ -1,29 +1,47 @@
 package com.group.silent_santa.service;
 
-import com.group.silent_santa.model.LettersModel;
-import com.group.silent_santa.model.RequestsModel;
-import com.group.silent_santa.model.UsersModel;
+import com.group.silent_santa.DTO.LetterRequestDTO;
+import com.group.silent_santa.model.*;
+import com.group.silent_santa.repository.UsersRepository;
+import com.group.silent_santa.repository.LettersRepository;
 import com.group.silent_santa.repository.RequestsRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.messaging.simp.SimpMessagingTemplate; // Import SimpMessagingTemplate
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime; // Import LocalDateTime
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
+// import java.util.stream.Collectors; // Not used in this snippet
 
 @Service
 @RequiredArgsConstructor
 public class RequestsService {
 
     private final RequestsRepository requestsRepository;
+    private final UsersRepository usersRepository;
+    private final LettersRepository lettersRepository;
+    private final SimpMessagingTemplate messagingTemplate; // Autowire SimpMessagingTemplate
+    private final WebSocketNotificationService webSocketNotificationService;
+    public List<LettersModel> getAllRequests(UUID userId) {
+        return requestsRepository.findRequestLettersByUserId(userId);
+    }
 
-    public RequestsModel addRequest(UsersModel user, LettersModel letter) {
-        // Check if a request already exists
-        List<RequestsModel> existingRequests = requestsRepository.findByUserAndLetter(user, letter);
-        if (!existingRequests.isEmpty()) {
-            return existingRequests.get(0); // Return the existing request
+
+    public RequestsModel addRequest(UUID userId, UUID letterId) {
+        if (requestsRepository.existsByUserIdAndLetterId(userId, letterId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Letter is already in requests");
         }
+
+        UsersModel user = usersRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        LettersModel letter = lettersRepository.findById(letterId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Letter not found"));
 
         RequestsModel request = new RequestsModel();
         request.setUser(user);
@@ -33,78 +51,72 @@ public class RequestsService {
         return requestsRepository.save(request);
     }
 
+    public void removeRequest(UUID userId, UUID letterId) {
+        RequestsModel req = requestsRepository.findByUserIdAndLetterId(userId, letterId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found"));
+
+        requestsRepository.delete(req);
+    }
+
     public boolean acceptRequest(UUID requestId, UsersModel admin) {
         Optional<RequestsModel> optionalRequest = requestsRepository.findById(requestId);
-
         if (optionalRequest.isPresent()) {
             RequestsModel request = optionalRequest.get();
-
-            // Check if the admin is the one who posted the letter
-            if (!request.getLetter().getPostedBy().getId().equals(admin.getId())) {
+            if (!request.getLetter().getPostedBy().getId().equals(admin.getId()) /* && !admin.getRole().equals("ADMIN_ROLE_NAME") */) {
+                // Consider a more specific exception or handling for authorization
                 throw new SecurityException("You are not authorized to accept this request.");
             }
-
+            // Update the letter status to WORKING
+            LettersModel letter = request.getLetter();
+            letter.setStatus(LettersModel.LetterStatus.WORKING);
             request.setStatus(RequestsModel.RequestStatus.ACCEPTED);
             requestsRepository.save(request);
+            // Send notification to the user who made the request
+            webSocketNotificationService.sendRequestStatusNotification(request, "accepted");
             return true;
         }
         return false;
     }
 
-    public boolean denyRequest(UUID requestId, UsersModel admin) {
-        Optional<RequestsModel> optionalRequest = requestsRepository.findById(requestId);
+      public boolean denyRequest(UUID requestId, UsersModel admin) {
+         Optional<RequestsModel> optionalRequest = requestsRepository.findById(requestId);
+         if (optionalRequest.isPresent()) {
+             RequestsModel request = optionalRequest.get();
+             if (!request.getLetter().getPostedBy().getId().equals(admin.getId()) /* && !admin.getRole().equals("ADMIN_ROLE_NAME") */) {
+                 // Consider a more specific exception or handling for authorization
+                 throw new SecurityException("You are not authorized to accept this request.");
+             }
+             request.setStatus(RequestsModel.RequestStatus.DENIED);
+             requestsRepository.save(request);
+             // Send notification to the user who made the request
+             webSocketNotificationService.sendRequestStatusNotification(request, "denied");
+             return true;
+         }
+          return false;
+     }
 
-        if (optionalRequest.isPresent()) {
-            RequestsModel request = optionalRequest.get();
+    public boolean isRequested(UUID userId, UUID letterId) {
+        return requestsRepository.existsByUserIdAndLetterId(userId, letterId);
+    }
 
-            if (!request.getLetter().getPostedBy().getId().equals(admin.getId())) {
-                throw new SecurityException("You are not authorized to deny this request.");
+    public List<LetterRequestDTO> getLetterRequestsForOwner(UsersModel user) {
+        // Get all letters posted by this user
+        List<LettersModel> userLetters = lettersRepository.findByPostedBy(user);
+
+        if (userLetters.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Create a list to store letter requests
+        List<LetterRequestDTO> letterRequests = new ArrayList<>();
+
+        // For each letter, get all requests and convert to DTOs
+        for (LettersModel letter : userLetters) {
+            List<RequestsModel> requests = requestsRepository.findByLetter(letter);
+            for (RequestsModel request : requests) {
+                letterRequests.add(LetterRequestDTO.fromRequestModel(request));
             }
-
-            request.setStatus(RequestsModel.RequestStatus.DENIED);
-            requestsRepository.save(request);
-            return true;
         }
-        return false;
-    }
-
-    public List<RequestsModel> getRequestsByUser(UsersModel user) {
-        return requestsRepository.findByUser(user);
-    }
-
-    public List<RequestsModel> getRequestsByLetter(LettersModel letter) {
-        return requestsRepository.findByLetter(letter);
-    }
-
-    public List<LettersModel> getRequestedLettersByUser(UsersModel user) {
-        // Find all requests made by the user
-        List<RequestsModel> userRequests = requestsRepository.findByUser(user);
-
-        // Extract and return the letters associated with those requests
-        return userRequests.stream()
-                .map(RequestsModel::getLetter)  // Extract the Letter from each Request
-                .collect(Collectors.toList());
-    }
-
-    public List<LettersModel> getAcceptedLettersByUser(UsersModel user) {
-        // Find all accepted requests made by the user
-        List<RequestsModel> acceptedRequests = requestsRepository.findByUserAndStatus(
-                user, RequestsModel.RequestStatus.ACCEPTED);
-
-        // Extract and return the letters associated with those requests
-        return acceptedRequests.stream()
-                .map(RequestsModel::getLetter)
-                .collect(Collectors.toList());
-    }
-
-    public List<LettersModel> getWaitingLettersByUser(UsersModel user) {
-        // Find all waiting requests made by the user
-        List<RequestsModel> waitingRequests = requestsRepository.findByUserAndStatus(
-                user, RequestsModel.RequestStatus.WAITING);
-
-        // Extract and return the letters associated with those requests
-        return waitingRequests.stream()
-                .map(RequestsModel::getLetter)
-                .collect(Collectors.toList());
+        return letterRequests;
     }
 }

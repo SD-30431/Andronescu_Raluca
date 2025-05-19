@@ -10,24 +10,31 @@
       <a href="/" class="nav-link">Home</a>
       <a href="/letters" class="nav-link">Letters</a>
       <a href="/favorites" class="nav-link">Favorites</a>
+      <a href="/requests" class="nav-link">Request</a>
       <a href="/my-letters" class="nav-link">My Letters</a>
     </div>
     
     <div class="navbar-right">
+      <!-- Add notification bell here -->
+      <app-notification *ngIf="isAuthenticated" class="notification-bell-container"></app-notification>
+      
       <img src="assets/Silent_Santa.png" alt="User Icon" class="user-icon" />
       
       <!-- Account Button with Dropdown Toggle -->
-      <button class="account-button" (click)="toggleDropdown()">Account</button>
+      <button class="account-button" (click)="toggleDropdown()">Account
       
       <!-- Dropdown Menu for Account -->
       <div class="dropdown-menu" [class.open]="dropdownOpen">
         <ul>
           <li *ngIf="isAuthenticated"><a href="/my-account">My Account</a></li>
+          <li *ngIf="isAuthenticated && isAdmin"><a href="/activity-list">User Activity</a></li>
+          <li *ngIf="isAuthenticated && isAdmin"><a href="/add-letter">Add Letter</a></li>
+          
           <li *ngIf="isAuthenticated"><a href="#" (click)="logOut()">Log Out</a></li>
           <li *ngIf="!isAuthenticated"><a href="/login">Login</a></li>
           <li *ngIf="!isAuthenticated"><a href="/signup">Sign Up</a></li>
         </ul>
-      </div>
+      </div></button>
     </div>
   </nav>
 </header>
